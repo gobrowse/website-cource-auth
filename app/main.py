@@ -589,3 +589,325 @@ def delete_account(request: Request, db: Session = Depends(get_db)):
     response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie("access_token")
     return response
+
+
+@app.get("/lesson/{slug}", response_class=HTMLResponse)
+def lesson_page(slug: str, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    
+    lesson = db.query(Lesson).filter(Lesson.slug == slug).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    
+    course = db.query(Course).filter(Course.id == lesson.course_id).first()
+    
+    import re
+    content_html = lesson.content
+    content_html = re.sub(r'^# (.+)$', r'<h1 class="text-3xl font-bold mb-6">\1</h1>', content_html, flags=re.MULTILINE)
+    content_html = re.sub(r'^## (.+)$', r'<h2 class="text-2xl font-bold mb-4 mt-8">\1</h2>', content_html, flags=re.MULTILINE)
+    content_html = re.sub(r'^### (.+)$', r'<h3 class="text-xl font-bold mb-3 mt-6">\1</h3>', content_html, flags=re.MULTILINE)
+    content_html = re.sub(r'^[-*] (.+)$', r'<li class="ml-4 mb-2">\1</li>', content_html, flags=re.MULTILINE)
+    content_html = re.sub(r'\n\n', '</p><p class="mb-4 text-gray-300">', content_html)
+    content_html = f'<p class="mb-4 text-gray-300">{content_html}</p>'
+    
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{lesson.title} - CourseHub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold text-indigo-400">
+                <i class="fas fa-code mr-2"></i>CourseHub
+            </a>
+            <div class="flex items-center gap-4">
+                <a href="/courses" class="text-gray-400 hover:text-white">Courses</a>
+                <a href="/leaderboard" class="text-gray-400 hover:text-white">Leaderboard</a>
+                <a href="/logout" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition">Logout</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <a href="/course/{course.slug}" class="text-gray-400 hover:text-white mb-6 inline-block">
+            <i class="fas fa-arrow-left mr-2"></i>{course.title}
+        </a>
+        
+        <div class="bg-gray-800 rounded-xl p-8 border border-gray-700 mb-6">
+            <h1 class="text-3xl font-bold mb-4">{lesson.title}</h1>
+            <p class="text-gray-400 mb-8">Lesson {lesson.lesson_number}</p>
+            
+            <div class="prose prose-invert max-w-none mb-8">
+                {content_html}
+            </div>
+            
+            <a href="/lab/{lesson.id}" class="inline-block px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold transition">
+                <i class="fas fa-code mr-2"></i>Practice Lab
+            </a>
+        </div>
+    </div>
+</body>
+</html>"""
+    return html
+
+
+@app.get("/lab/{lesson_id}", response_class=HTMLResponse)
+def lab_page(lesson_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    
+    lab = db.query(Lab).filter(Lab.lesson_id == lesson_id).first()
+    if not lab:
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>No Lab - CourseHub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center">
+    <div class="text-center">
+        <h1 class="text-2xl font-bold mb-4">Lab coming soon!</h1>
+        <a href="/lesson/{lesson.slug}" class="text-indigo-400 hover:text-indigo-300">Back to lesson</a>
+    </div>
+</body>
+</html>"""
+        return html
+    
+    course = db.query(Course).filter(Course.id == lesson.course_id).first()
+    
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{lab.title} - CourseHub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold text-indigo-400">
+                <i class="fas fa-code mr-2"></i>CourseHub
+            </a>
+            <div class="flex items-center gap-4">
+                <a href="/courses" class="text-gray-400 hover:text-white">Courses</a>
+                <a href="/logout" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition">Logout</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="max-w-6xl mx-auto px-4 py-12">
+        <a href="/lesson/{lesson.slug}" class="text-gray-400 hover:text-white mb-6 inline-block">
+            <i class="fas fa-arrow-left mr-2"></i>{lesson.title}
+        </a>
+        
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
+            <h1 class="text-2xl font-bold mb-2">{lab.title}</h1>
+            <p class="text-gray-400 mb-6">{lab.description}</p>
+        </div>
+        
+        <div class="grid lg:grid-cols-2 gap-6">
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-lg font-bold mb-4">Code Editor</h2>
+                <textarea id="code-editor" class="w-full h-64 bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 font-mono text-sm focus:border-indigo-500 focus:outline-none" placeholder="Write your code here...">{lab.starter_code}</textarea>
+                <div class="flex gap-4 mt-4">
+                    <button onclick="runCode()" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-bold transition">
+                        <i class="fas fa-play mr-2"></i>Run
+                    </button>
+                    <button onclick="toggleHints('hints')" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition">
+                        <i class="fas fa-lightbulb mr-2"></i>Hints
+                    </button>
+                    <button onclick="showSolution()" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition">
+                        <i class="fas fa-eye mr-2"></i>Solution
+                    </button>
+                </div>
+                <div id="exec-status" class="text-gray-400 mt-2 text-sm"></div>
+            </div>
+            
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-lg font-bold mb-4">Output</h2>
+                <pre id="output" class="w-full h-64 bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 overflow-auto font-mono text-sm text-green-400"><code class="text-gray-500">Run your code to see output...</code></pre>
+            </div>
+        </div>
+        
+        <div id="hints" class="hidden bg-gray-800 rounded-xl p-6 border border-yellow-700 mt-6">
+            <h2 class="text-lg font-bold mb-4 text-yellow-400">Hints</h2>
+            <p class="text-gray-300">{lab.hints}</p>
+        </div>
+        
+        <div id="solution" class="hidden bg-gray-800 rounded-xl p-6 border border-green-700 mt-6">
+            <h2 class="text-lg font-bold mb-4 text-green-400">Solution</h2>
+            <pre class="bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 overflow-auto font-mono text-sm"><code>{lab.solution}</code></pre>
+        </div>
+    </div>
+    
+    <script>
+        async function runCode() {{
+            const code = document.getElementById('code-editor').value;
+            const output = document.getElementById('output');
+            output.innerHTML = '<code>Executing...</code>';
+            
+            const courseSlug = '{course.slug}';
+            if (courseSlug === 'python') {{
+                await window.executePython(code, output);
+            }} else {{
+                await window.executeRust(code, output);
+            }}
+        }}
+        
+        function toggleHints(id) {{
+            document.getElementById(id).classList.toggle('hidden');
+        }}
+        
+        function showSolution() {{
+            document.getElementById('solution').classList.remove('hidden');
+        }}
+    </script>
+    <script src="/static/ide.js"></script>
+</body>
+</html>"""
+    return html
+
+
+@app.get("/leaderboard", response_class=HTMLResponse)
+def leaderboard_page(request: Request, db: Session = Depends(get_db)):
+    from app.database import Streak, User
+    
+    top_streaks = db.query(Streak, User).join(User, Streak.user_id == User.id).order_by(Streak.current_streak.desc()).limit(20).all()
+    
+    rows = "".join([f'''
+    <tr class="border-b border-gray-700">
+        <td class="px-6 py-4 text-center font-bold">{i+1}</td>
+        <td class="px-6 py-4">{streak[1].username}</td>
+        <td class="px-6 py-4 text-center text-green-400 font-bold">{streak[0].current_streak}</td>
+        <td class="px-6 py-4 text-center text-yellow-400">{streak[0].longest_streak}</td>
+    </tr>''' for i, streak in enumerate(top_streaks)])
+    
+    if not rows:
+        rows = '<tr><td colspan="4" class="px-6 py-8 text-center text-gray-400">No streak data yet. Start learning!</td></tr>'
+    
+    user = get_current_user(request, db)
+    user_streak = None
+    if user:
+        user_streak = db.query(Streak).filter(Streak.user_id == user.id).first()
+    
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard - CourseHub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold text-indigo-400">
+                <i class="fas fa-code mr-2"></i>CourseHub
+            </a>
+            <div class="flex items-center gap-4">
+                <a href="/" class="text-gray-400 hover:text-white">Home</a>
+                {"".join([f'<a href="/courses" class="text-gray-400 hover:text-white">Courses</a>' if user else ''])}
+                <a href="/login" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition">Login</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <h1 class="text-4xl font-bold mb-4 text-center">
+            <i class="fas fa-trophy text-yellow-400 mr-3"></i>Lesson Streak Leaderboard
+        </h1>
+        <p class="text-gray-400 text-center mb-12">Consecutive days learning earns you streak points!</p>
+        
+        {"".join([f'''
+        <div class="bg-gray-800 rounded-xl p-6 border border-indigo-500 mb-8">
+            <p class="text-center text-gray-400">Your current streak</p>
+            <p class="text-center text-4xl font-bold text-green-400">{user_streak.current_streak if user_streak else 0}</p>
+        </div>''' if user else ''])}
+        
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <table class="w-full">
+                <thead class="bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-center">Rank</th>
+                        <th class="px-6 py-3 text-left">User</th>
+                        <th class="px-6 py-3 text-center">Current Streak</th>
+                        <th class="px-6 py-3 text-center">Best Streak</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>"""
+    return html
+
+
+@app.post("/lesson/{lesson_id}/complete")
+def complete_lesson(lesson_id: int, request: Request, db: Session = Depends(get_db)):
+    from datetime import datetime
+    user = get_current_user(request, db)
+    if not user:
+        return {"error": "Not authenticated"}, 401
+    
+    progress = db.query(UserProgress).filter(
+        UserProgress.user_id == user.id,
+        UserProgress.lesson_id == lesson_id
+    ).first()
+    
+    if not progress:
+        progress = UserProgress(
+            user_id=user.id,
+            lesson_id=lesson_id,
+            completed=False
+        )
+        db.add(progress)
+    
+    progress.completed = True
+    progress.completed_at = datetime.utcnow().isoformat()
+    db.commit()
+    
+    from app.database import Streak
+    streak = db.query(Streak).filter(Streak.user_id == user.id).first()
+    today = datetime.utcnow().date().isoformat()
+    
+    if not streak:
+        streak = Streak(
+            user_id=user.id,
+            current_streak=1,
+            longest_streak=1,
+            last_activity_date=today
+        )
+        db.add(streak)
+    else:
+        if streak.last_activity_date != today:
+            yesterday = (datetime.utcnow().date()).isoformat()
+            if streak.last_activity_date != yesterday:
+                streak.current_streak = 1
+            else:
+                streak.current_streak += 1
+            if streak.current_streak > streak.longest_streak:
+                streak.longest_streak = streak.current_streak
+            streak.last_activity_date = today
+    
+    db.commit()
+    return {"success": True}
