@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
-from app.database import get_db, Course, init_db, User
+from app.database import get_db, Course, init_db, User, Lesson, Lab, UserProgress
 from app.auth import get_current_user, require_auth, login_user, logout_user, register_user
 
 app = FastAPI(title="Course Platform")
