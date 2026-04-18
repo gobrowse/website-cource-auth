@@ -67,9 +67,21 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def create_persistent_token() -> str:
+    import secrets
+    return secrets.token_urlsafe(32)
+
+
 def get_current_user(request: Request, db: Session) -> Optional[User]:
     token = request.cookies.get("access_token")
     if not token:
+        persistent_token = request.cookies.get("persistent_token")
+        if persistent_token:
+            user = db.query(User).filter(User.persistent_token == persistent_token).first()
+            if user:
+                expires = user.persistent_token_expires
+                if expires and datetime.fromisoformat(expires) > datetime.utcnow():
+                    return user
         return None
     
     try:

@@ -128,6 +128,11 @@ def login_page(request: Request, error: str = None):
                         class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:border-indigo-500 focus:outline-none">
                 </div>
                 
+                <div class="mb-4 flex items-center">
+                    <input type="checkbox" name="remember" value="on" id="remember" class="w-4 h-4 mr-2">
+                    <label for="remember" class="text-gray-400 text-sm">Remember me (stay logged in across sessions)</label>
+                </div>
+                
                 <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 py-3 rounded-lg font-bold transition">
                     Login
                 </button>
@@ -248,6 +253,7 @@ async def login(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    remember: str = Form(default="off"),
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.username == username).first()
@@ -261,7 +267,7 @@ async def login(
         html = login_page(request, error="Invalid username or password")
         return HTMLResponse(content=html, status_code=200)
     
-    from app.auth import create_access_token
+    from app.auth import create_access_token, create_persistent_token
     token = create_access_token(data={"sub": user.username})
     
     response = RedirectResponse(url="/courses", status_code=302)
@@ -272,6 +278,22 @@ async def login(
         max_age=60 * 60 * 24 * 7,
         samesite="lax"
     )
+    
+    if remember == "on":
+        persistent_token = create_persistent_token()
+        expires_days = 365
+        expires = (datetime.utcnow() + timedelta(days=expires_days)).isoformat()
+        user.persistent_token = persistent_token
+        user.persistent_token_expires = expires
+        db.commit()
+        response.set_cookie(
+            key="persistent_token",
+            value=persistent_token,
+            httponly=True,
+            max_age=60 * 60 * 24 * expires_days,
+            samesite="lax"
+        )
+    
     return response
 
 
@@ -315,9 +337,16 @@ async def register(
 
 
 @app.get("/logout")
-def logout():
+def logout(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if user:
+        user.persistent_token = None
+        user.persistent_token_expires = None
+        db.commit()
+    
     response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie("access_token")
+    response.delete_cookie("persistent_token")
     return response
 
 

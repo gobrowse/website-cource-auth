@@ -26,6 +26,8 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(String(50), default=None)
+    persistent_token = Column(String(255), nullable=True, index=True)
+    persistent_token_expires = Column(String(50), nullable=True)
 
 
 class Course(Base):
